@@ -271,10 +271,104 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
             _startLocation = location;
             [self handlePanBegin];
             break;
+        case UIGestureRecognizerStateChanged:
+        { CGFloat angle = 0;
+            if (_startLocation.x < self.view.frame.size.width/2) {
+                angle = -(M_PI/2)*(point.y/self.view.frame.size.height);
+            }else{
+                angle = (M_PI/2)*(point.y/self.view.frame.size.height);
+            }
+            CGAffineTransform rotation = CGAffineTransformMakeRotation(angle);
+            CGAffineTransform translation = CGAffineTransformMakeTranslation(0, point.y);
+            CGAffineTransform transform = CGAffineTransformConcat(rotation, translation);
+            photoView.imageView.transform = transform;
+            
+            double percent = 1 - fabs(point.y)/(self.view.frame.size.height/2);
+            self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:percent];
+            _backgroundView.alpha = percent;
+        }
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+            if (fabs(point.y) > 200 || fabs(velocity.y) > 500) {
+                [self showRotationCompletionAnimationFromPoint:point];
+            }else{
+                [self showCancellationAnimation];
+            }
+            break;
             
         default:
             break;
     }
+}
+
+- (void)performScaleWithPan:(UIPanGestureRecognizer *)pan
+{
+    CGPoint point = [pan translationInView:self.view];
+    CGPoint location = [pan locationInView:self.view];
+    CGPoint velocity = [pan velocityInView:self.view];
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    switch (pan.state) {
+        case UIGestureRecognizerStateBegan:
+            _startLocation = location;
+            [self handlePanBegin];
+            break;
+        case UIGestureRecognizerStateChanged:
+        {
+            double percent = 1-fabs(point.y)/(self.view.frame.size.height/2);
+            percent = MAX(percent, 0);
+            double s = MAX(percent, 0.5);
+            CGAffineTransform translation = CGAffineTransformMakeTranslation(point.x/s, point.y/s);
+            CGAffineTransform scale = CGAffineTransformMakeScale(s, s);
+            photoView.imageView.transform = CGAffineTransformConcat(translation, scale);
+            self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:percent];
+            _backgroundView.alpha = percent;
+        }
+            break;
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+            if (fabs(point.y) > 100 || fabs(velocity.y) > 500) {
+                [self showDismissalAnimation];
+            }else{
+                [self showCancellationAnimation];
+            }
+            
+        default:
+            break;
+    }
+}
+
+- (void)performSlideWithPan:(UIPanGestureRecognizer *)pan
+{
+    CGPoint point = [pan translationInView:self.view];
+    CGPoint location = [pan locationInView:self.view];
+    CGPoint velocity = [pan velocityInView:self.view];
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    switch (pan.state) {
+        case UIGestureRecognizerStateBegan:
+            _startLocation = location;
+            [self handlePanBegin];
+            break;
+        case UIGestureRecognizerStateChanged: {
+            photoView.imageView.transform = CGAffineTransformMakeTranslation(0, point.y);
+            double percent = 1 - fabs(point.y)/(self.view.frame.size.height/2);
+            self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:percent];
+            _backgroundView.alpha = percent;
+        }
+            break;
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled: {
+            if (fabs(point.y) > 200 || fabs(velocity.y) > 500) {
+                [self showSlideCompletionAnimationFromPoint:point];
+            } else {
+                [self showCancellationAnimation];
+            }
+        }
+            break;
+            
+        default:
+            break;
+    }
+
 }
 
 
@@ -317,6 +411,139 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
     UIGraphicsEndImageContext();
     return image;
 }
+
+#pragma mark -Animation
+
+- (void)showDismissalAnimation
+{
+    ZJPhotoItem *item = [_photoItems objectAtIndex:_currentPage];
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    [photoView cancelCurrentImageLoad];
+    [UIApplication sharedApplication].statusBarHidden = NO;
+    photoView.progressLayer.hidden = YES;
+    item.sourceView.alpha = 0;
+    CGRect sourceRect;
+    float systemVersion = [[[UIDevice currentDevice] systemVersion] floatValue];
+    if (systemVersion >= 8.0 && systemVersion < 9.0) {
+        sourceRect = [item.sourceView.superview convertRect:item.sourceView.frame toCoordinateSpace:photoView];
+    } else {
+        sourceRect = [item.sourceView.superview convertRect:item.sourceView.frame toView:photoView];
+    }
+    if (_bounces) {
+        [UIView animateWithDuration:kSpringAnimationDuration delay:0 usingSpringWithDamping:0.6 initialSpringVelocity:0 options:kNilOptions animations:^{
+            photoView.imageView.frame = sourceRect;
+            self.view.backgroundColor = [UIColor clearColor];
+            _backgroundView.alpha = 0;
+        } completion:^(BOOL finished) {
+            [self dismissAnimated:NO];
+        }];
+    } else {
+        [UIView animateWithDuration:kAnimationDuration animations:^{
+            photoView.imageView.frame = sourceRect;
+            self.view.backgroundColor = [UIColor clearColor];
+            _backgroundView.alpha = 0;
+        } completion:^(BOOL finished) {
+            [self dismissAnimated:NO];
+        }];
+    }
+}
+
+- (void)showSlideCompletionAnimationFromPoint:(CGPoint)point {
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    BOOL throwToTop = point.y < 0;
+    CGFloat toTranslationY = 0;
+    if (throwToTop) {
+        toTranslationY = -self.view.frame.size.height;
+    } else {
+        toTranslationY = self.view.frame.size.height;
+    }
+    [UIView animateWithDuration:kAnimationDuration animations:^{
+        photoView.imageView.transform = CGAffineTransformMakeTranslation(0, toTranslationY);
+        self.view.backgroundColor = [UIColor clearColor];
+        _backgroundView.alpha = 0;
+    } completion:^(BOOL finished) {
+        [self dismissAnimated:YES];
+    }];
+}
+
+
+- (void)showRotationCompletionAnimationFromPoint:(CGPoint)point
+{
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    BOOL startFromLeft = _startLocation.x<self.view.frame.size.width/2;
+    BOOL throwToTop = point.y < 0;
+    CGFloat angle, toTransLationY;
+    if (throwToTop) {
+        angle = startFromLeft ? (M_PI/2):-(M_PI/2);
+        toTransLationY = -self.view.frame.size.height;
+    }else{
+        angle = startFromLeft? -(M_PI/2):(M_PI/2);
+        toTransLationY = self.view.frame.size.height;
+    }
+    
+    CGFloat angle0 = 0;
+    if (_startLocation.x < self.view.frame.size.width/2) {
+        angle0 = -(M_PI/2)*(point.y/self.view.frame.size.height);
+    }else{
+        angle0 = (M_PI/2)*(point.y/self.view.frame.size.height);
+    }
+    
+    CABasicAnimation *rotationAnimation = [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
+    rotationAnimation.fromValue = @(angle0);
+    rotationAnimation.toValue = @(angle);
+    CABasicAnimation *translationAnimation = [CABasicAnimation animationWithKeyPath:@"transform.translation.y"];
+    translationAnimation.fromValue = @(point.y);
+    translationAnimation.toValue = @(toTransLationY);
+    CAAnimationGroup *throwAnimation = [CAAnimationGroup animation];
+    throwAnimation.duration = kAnimationDuration;
+    throwAnimation.delegate = self;
+    throwAnimation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+    throwAnimation.animations = @[rotationAnimation, translationAnimation];
+    [throwAnimation setValue:throwAnimation forKey:@"id"];
+    [photoView.imageView.layer addAnimation:throwAnimation forKey:@"throwAnimation"];
+    
+    CGAffineTransform rotation = CGAffineTransformMakeRotation(angle);
+    CGAffineTransform translation = CGAffineTransformMakeTranslation(0, toTransLationY);
+    CGAffineTransform transform = CGAffineTransformConcat(rotation, translation);
+    photoView.imageView.transform = transform;
+    
+    [UIView animateWithDuration:kAnimationDuration animations:^{
+        self.view.backgroundColor = [UIColor clearColor];
+        _backgroundView.alpha = 0;
+    }];
+    
+}
+
+
+- (void)showCancellationAnimation
+{
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    ZJPhotoItem *item = [_photoItems objectAtIndex:_currentPage];
+    item.sourceView.alpha = 1;
+    if (!item.finished) {
+        photoView.progressLayer.hidden = NO;
+    }
+    if (_bounces && _dismissalStyle == ZJPhotoBrowserInteractiveDismissStyleScale) {
+        [UIView animateWithDuration:kSpringAnimationDuration delay:0 usingSpringWithDamping:0.6 initialSpringVelocity:0 options:kNilOptions animations:^{
+            photoView.imageView.transform = CGAffineTransformIdentity;
+            self.view.backgroundColor = [UIColor blackColor];
+            _backgroundView.alpha = 1;
+        } completion:^(BOOL finished) {
+            [[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+            [self configPhotoView:photoView withItem:item];
+        }];
+    }else{
+        [UIView animateWithDuration:kAnimationDuration animations:^{
+            photoView.imageView.transform = CGAffineTransformIdentity;
+            self.view.backgroundColor = [UIColor blackColor];
+            _backgroundView.alpha = 1;
+        }completion:^(BOOL finished) {
+            [[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+            [self configPhotoView:photoView withItem:item];
+        }];
+    }
+}
+
 
 
 
