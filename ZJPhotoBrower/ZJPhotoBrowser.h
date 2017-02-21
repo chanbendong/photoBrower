@@ -31,15 +31,10 @@ typedef NS_ENUM(NSInteger, ZJPhotoBrowserImageLoadingStyle) {
     ZJPhotoBrowserImageLoadingStyleIndeterminate,
     ZJPhotoBrowserImageLoadingStyleDeterminate
 };
-@protocol ZJPhotoBrowserDelegate <NSObject>
 
-- (void)ZJPhotoBrowser:(ZJPhotoBrowser *)browser didSelectItem:(zjphotoItem*)item atIndex:(NSInteger)index;
-
-@end
-
+@protocol ZJPhotoBrowserDelegate;
 @interface ZJPhotoBrowser : UIViewController
-
-@property (nonatomic, assign) ZJPhotoBrowserInteractiveDismissalStyle dismissalStyle;
+@property (nonatomic, assign) ZJPhotoBrowserInteractiveDismissStyle dismissalStyle;
 @property (nonatomic, assign) ZJPhotoBrowserBackgroundStyle backgroundStyle;
 @property (nonatomic, assign) ZJPhotoBrowserPageIndicatorStyle pageindicatorStyle;
 @property (nonatomic, assign) ZJPhotoBrowserImageLoadingStyle loadingStyle;
@@ -48,7 +43,13 @@ typedef NS_ENUM(NSInteger, ZJPhotoBrowserImageLoadingStyle) {
 
 + (instancetype)browserWithPhotoItems:(NSArray<ZJPhotoItem *> *)photoItems selectedIndex:(NSInteger)selectedIndex;
 - (instancetype)initWithPhotoItems:(NSArray<ZJPhotoItem *> *)photoItems selectedIndex:(NSInteger)selectedIndex;
-- (void)
+- (void)showFromViewController:(UIViewController *)vc;
+
+@end
+
+@protocol ZJPhotoBrowserDelegate <NSObject>
+
+- (void)ZJPhotoBrowser:(ZJPhotoBrowser *)browser didSelectItem:(ZJPhotoItem*)item atIndex:(NSInteger)index;
 
 @end
 

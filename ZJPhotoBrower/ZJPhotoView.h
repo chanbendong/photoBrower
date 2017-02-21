@@ -8,12 +8,11 @@
 
 #import <UIKit/UIKit.h>
 #import "ZJProgressLayer.h"
-#import "UIImageView+YYWebImage.h"
 #import "YYAnimatedImageView.h"
-
+#import "UIImageView+YYWebImage.h"
 extern CGFloat const ZJPhotoViewPadding;
 
-@class ZJPhotoItem, YYAnimatedImageView;
+@class ZJPhotoItem;
 
 @interface ZJPhotoView : UIScrollView
 

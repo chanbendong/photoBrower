@@ -11,6 +11,7 @@
 #import "ZJPhotoView.h"
 #import "UIImageView+YYWebImage.h"
 #import "UIImage+YYAdd.h"
+
 static const NSTimeInterval kAnimationDuration = 0.3;
 static const NSTimeInterval kSpringAnimationDuration = 0.5;
 
@@ -55,6 +56,7 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
         _reusableItemViews = [[NSMutableSet alloc] init];
         _visibleItemViews = [[NSMutableArray alloc] init];
     }
+    return self;
 }
 
 
@@ -91,7 +93,7 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
     CGSize contentSize = CGSizeMake(rect.size.width*_photoItems.count, rect.size.height);
     _scrollView.contentSize = contentSize;
   
-//    [self addGestureRecognizer]
+    [self addGestureRecognizer];
     
     CGPoint contectOffset = CGPointMake(_scrollView.frame.size.width*_currentPage, 0);
     [_scrollView setContentOffset:contectOffset animated:NO];
@@ -137,7 +139,7 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
         } completion:^(BOOL finished) {
             [self configPhotoView:photoView withItem:item];
             _presented = YES;
-            [[UIApplication sharedApplication]setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+             [[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
 
         }];
     }else{
@@ -148,9 +150,14 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
         } completion:^(BOOL finished) {
             [self configPhotoView:photoView withItem:item];
             _presented = YES;
-            [[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
-        }];
+          [[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+             }];
     }
+}
+
+- (BOOL)prefersStatusBarHidden
+{
+    return YES;
 }
 
 - (void)dealloc
@@ -242,6 +249,7 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
             [_delegate ZJPhotoBrowser:self didSelectItem:item atIndex:page];
         }
     }
+   
 }
 
 - (void)dismissAnimated:(BOOL)animated
@@ -258,6 +266,82 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
         item.sourceView.alpha = 1;
     }
     [self dismissViewControllerAnimated:NO completion:nil];
+}
+
+
+
+#pragma mark -GestureRecognzier 
+
+- (void)addGestureRecognizer {
+    UITapGestureRecognizer *doubleTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(didDoubleTap:)];
+    doubleTap.numberOfTapsRequired = 2;
+    [self.view addGestureRecognizer:doubleTap];
+    
+    UITapGestureRecognizer *singleTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(didSingleTap:)];
+    singleTap.numberOfTapsRequired = 1;
+    [singleTap requireGestureRecognizerToFail:doubleTap];
+    [self.view addGestureRecognizer:singleTap];
+    
+    UILongPressGestureRecognizer *longPress = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(didLongPress:)];
+    [self.view addGestureRecognizer:longPress];
+    
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(didPan:)];
+    [self.view addGestureRecognizer:pan];
+}
+
+- (void)didSingleTap:(UITapGestureRecognizer *)tap {
+    [self showDismissalAnimation];
+}
+
+
+- (void)didDoubleTap:(UITapGestureRecognizer *)tap {
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    ZJPhotoItem *item = [_photoItems objectAtIndex:_currentPage];
+    if (!item.finished) {
+        return;
+    }
+    if (photoView.zoomScale > 1) {
+        [photoView setZoomScale:1 animated:YES];
+    } else {
+        CGPoint location = [tap locationInView:self.view];
+        CGFloat maxZoomScale = photoView.maximumZoomScale;
+        CGFloat width = self.view.bounds.size.width / maxZoomScale;
+        CGFloat height = self.view.bounds.size.height / maxZoomScale;
+        [photoView zoomToRect:CGRectMake(location.x - width/2, location.y - height/2, width, height) animated:YES];
+    }
+}
+- (void)didLongPress:(UILongPressGestureRecognizer *)longPress {
+    if (longPress.state != UIGestureRecognizerStateBegan) {
+        return;
+    }
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    UIImage *image = photoView.imageView.image;
+    if (!image) {
+        return;
+    }
+    UIActivityViewController *activityViewController = [[UIActivityViewController alloc] initWithActivityItems:@[image] applicationActivities:nil];
+    [self presentViewController:activityViewController animated:YES completion:nil];
+}
+
+- (void)didPan:(UIPanGestureRecognizer *)pan {
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    if (photoView.zoomScale > 1.1) {
+        return;
+    }
+    
+    switch (_dismissalStyle) {
+        case ZJPhotoBrowserInteractiveDismissStyleRotation:
+            [self performRotationWithPan:pan];
+            break;
+        case ZJPhotoBrowserInteractiveDismissStyleScale:
+            [self performScaleWithPan:pan];
+            break;
+        case ZJPhotoBrowserInteractiveDismissStyleSlide:
+            [self performSlideWithPan:pan];
+            break;
+        default:
+            break;
+    }
 }
 
 - (void)performRotationWithPan:(UIPanGestureRecognizer *)pan
@@ -287,6 +371,7 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
             self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:percent];
             _backgroundView.alpha = percent;
         }
+            break;
         case UIGestureRecognizerStateEnded:
         case UIGestureRecognizerStateCancelled:
             if (fabs(point.y) > 200 || fabs(velocity.y) > 500) {
@@ -374,79 +459,26 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
 
 - (void)configPageLabelWithPage:(NSInteger)currentPage
 {
-    
+    _pageLabel.text = [NSString stringWithFormat:@"%ld / %ld",currentPage+1,_photoItems.count];
 }
 
 - (void)handlePanBegin
 {
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    [photoView cancelCurrentImageLoad];
+    ZJPhotoItem *item = [_photoItems objectAtIndex:_currentPage];
+    [UIApplication sharedApplication].statusBarHidden = NO;
+    photoView.progressLayer.hidden = YES;
+    item.sourceView.alpha = 0;
 }
 
 - (void)configPhotoView:(ZJPhotoView *)photoView withItem:(ZJPhotoItem *)item {
     [photoView setItem:item determinate:(_loadingStyle == ZJPhotoBrowserImageLoadingStyleDeterminate)];
 }
 
--(UIWindow*)getCurrentKeyWindow
-{
-    UIWindow * window = [[UIApplication sharedApplication] keyWindow];
-    if (window.windowLevel != UIWindowLevelNormal)
-    {
-        NSArray *windows = [[UIApplication sharedApplication] windows];
-        for(UIWindow * tmpWin in windows)
-        {
-            if (tmpWin.windowLevel == UIWindowLevelNormal)
-            {
-                window = tmpWin;
-                break;
-            }
-        }
-    }
-    
-    return window;
-}
-- (UIImage *)screenshot {
-    UIWindow *window = [self getCurrentKeyWindow];
-    UIGraphicsBeginImageContextWithOptions(window.bounds.size, YES, [UIScreen mainScreen].scale);
-    [window.layer renderInContext:UIGraphicsGetCurrentContext()];
-    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    return image;
-}
+
 
 #pragma mark -Animation
-
-- (void)showDismissalAnimation
-{
-    ZJPhotoItem *item = [_photoItems objectAtIndex:_currentPage];
-    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
-    [photoView cancelCurrentImageLoad];
-    [UIApplication sharedApplication].statusBarHidden = NO;
-    photoView.progressLayer.hidden = YES;
-    item.sourceView.alpha = 0;
-    CGRect sourceRect;
-    float systemVersion = [[[UIDevice currentDevice] systemVersion] floatValue];
-    if (systemVersion >= 8.0 && systemVersion < 9.0) {
-        sourceRect = [item.sourceView.superview convertRect:item.sourceView.frame toCoordinateSpace:photoView];
-    } else {
-        sourceRect = [item.sourceView.superview convertRect:item.sourceView.frame toView:photoView];
-    }
-    if (_bounces) {
-        [UIView animateWithDuration:kSpringAnimationDuration delay:0 usingSpringWithDamping:0.6 initialSpringVelocity:0 options:kNilOptions animations:^{
-            photoView.imageView.frame = sourceRect;
-            self.view.backgroundColor = [UIColor clearColor];
-            _backgroundView.alpha = 0;
-        } completion:^(BOOL finished) {
-            [self dismissAnimated:NO];
-        }];
-    } else {
-        [UIView animateWithDuration:kAnimationDuration animations:^{
-            photoView.imageView.frame = sourceRect;
-            self.view.backgroundColor = [UIColor clearColor];
-            _backgroundView.alpha = 0;
-        } completion:^(BOOL finished) {
-            [self dismissAnimated:NO];
-        }];
-    }
-}
 
 - (void)showSlideCompletionAnimationFromPoint:(CGPoint)point {
     ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
@@ -499,7 +531,7 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
     throwAnimation.delegate = self;
     throwAnimation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
     throwAnimation.animations = @[rotationAnimation, translationAnimation];
-    [throwAnimation setValue:throwAnimation forKey:@"id"];
+    [throwAnimation setValue:@"throwAnimation" forKey:@"id"];
     [photoView.imageView.layer addAnimation:throwAnimation forKey:@"throwAnimation"];
     
     CGAffineTransform rotation = CGAffineTransformMakeRotation(angle);
@@ -514,7 +546,7 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
     
 }
 
-
+#pragma mark -动画消失
 - (void)showCancellationAnimation
 {
     ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
@@ -543,7 +575,39 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
         }];
     }
 }
-
+- (void)showDismissalAnimation
+{
+    ZJPhotoItem *item = [_photoItems objectAtIndex:_currentPage];
+    ZJPhotoView *photoView = [self photoViewForPage:_currentPage];
+    [photoView cancelCurrentImageLoad];
+    [UIApplication sharedApplication].statusBarHidden = NO;
+    photoView.progressLayer.hidden = YES;
+    item.sourceView.alpha = 0;
+    CGRect sourceRect;
+    float systemVersion = [[[UIDevice currentDevice] systemVersion] floatValue];
+    if (systemVersion >= 8.0 && systemVersion < 9.0) {
+        sourceRect = [item.sourceView.superview convertRect:item.sourceView.frame toCoordinateSpace:photoView];
+    } else {
+        sourceRect = [item.sourceView.superview convertRect:item.sourceView.frame toView:photoView];
+    }
+    if (_bounces) {
+        [UIView animateWithDuration:kSpringAnimationDuration delay:0 usingSpringWithDamping:0.6 initialSpringVelocity:0 options:kNilOptions animations:^{
+            photoView.imageView.frame = sourceRect;
+            self.view.backgroundColor = [UIColor clearColor];
+            _backgroundView.alpha = 0;
+        } completion:^(BOOL finished) {
+            [self dismissAnimated:NO];
+        }];
+    } else {
+        [UIView animateWithDuration:kAnimationDuration animations:^{
+            photoView.imageView.frame = sourceRect;
+            self.view.backgroundColor = [UIColor clearColor];
+            _backgroundView.alpha = 0;
+        } completion:^(BOOL finished) {
+            [self dismissAnimated:NO];
+        }];
+    }
+}
 
 
 
@@ -567,6 +631,48 @@ static const NSTimeInterval kSpringAnimationDuration = 0.5;
     });
 }
 
+#pragma mark -helper
+-(UIWindow*)getCurrentKeyWindow
+{
+    UIWindow * window = [[UIApplication sharedApplication] keyWindow];
+    if (window.windowLevel != UIWindowLevelNormal)
+    {
+        NSArray *windows = [[UIApplication sharedApplication] windows];
+        for(UIWindow * tmpWin in windows)
+        {
+            if (tmpWin.windowLevel == UIWindowLevelNormal)
+            {
+                window = tmpWin;
+                break;
+            }
+        }
+    }
+    
+    return window;
+}
+- (UIImage *)screenshot {
+    UIWindow *window = [self getCurrentKeyWindow];
+    UIGraphicsBeginImageContextWithOptions(window.bounds.size, YES, [UIScreen mainScreen].scale);
+    [window.layer renderInContext:UIGraphicsGetCurrentContext()];
+    UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return image;
+}
+
+#pragma mark - Animation Delegate
+
+- (void)animationDidStop:(CAAnimation *)anim finished:(BOOL)flag {
+    if ([[anim valueForKey:@"id"] isEqualToString:@"throwAnimation"]) {
+        [self dismissAnimated:YES];
+    }
+}
+
+#pragma mark - ScrollView Delegate
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+    [self updateReusableItemViews];
+    [self configItemViews];
+}
 
 
 

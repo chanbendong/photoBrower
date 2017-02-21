@@ -10,6 +10,7 @@
 #import "ZJPhotoItem.h"
 
 
+
 const CGFloat ZJPhotoViewPadding = 10;
 const CGFloat ZJPhotoViewMaxScale = 3;
 
@@ -99,7 +100,7 @@ const CGFloat ZJPhotoViewMaxScale = 3;
         if (height <= self.bounds.size.height) {
             _imageView.center = CGPointMake(self.bounds.size.width/2, self.bounds.size.height/2);
         }else{
-            _imageView.center = CGPointMake(self.bounds.size.width, height/2);
+            _imageView.center = CGPointMake(self.bounds.size.width/2, height/2);
         }
         
         if (width / height > 2) {
